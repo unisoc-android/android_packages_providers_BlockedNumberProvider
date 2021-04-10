@@ -62,11 +62,16 @@ public class BlockedNumberDatabaseHelper {
         }
 
         private void createTables(SQLiteDatabase db) {
+            /* UNISOC: Bug 700893 add for CallFireWall. @{ */
             db.execSQL("CREATE TABLE " + Tables.BLOCKED_NUMBERS + " (" +
                     BlockedNumbers.COLUMN_ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
                     BlockedNumbers.COLUMN_ORIGINAL_NUMBER + " TEXT NOT NULL UNIQUE," +
+                    BlockedNumbers.BLOCK_TYPE + " INTEGER," +
+                    BlockedNumbers.MIN_MATCH + " TEXT," +
+                    BlockedNumbers.NAME + " TEXT," +
                     BlockedNumbers.COLUMN_E164_NUMBER + " TEXT" +
                     ")");
+            /* @} */
 
             db.execSQL("CREATE INDEX blocked_number_idx_original ON " + Tables.BLOCKED_NUMBERS +
                     " (" + BlockedNumbers.COLUMN_ORIGINAL_NUMBER + ");");

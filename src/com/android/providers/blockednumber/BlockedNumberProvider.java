@@ -80,6 +80,10 @@ public class BlockedNumberProvider extends ContentProvider {
     // to emulate calls from other apps.
     @VisibleForTesting
     static boolean ALLOW_SELF_CALL = true;
+    // UNISOC: Bug 700893 add for CallFireWall.
+    private static final int DEFAULT_BLOCK_TYPE = 7;
+    // UNISOC: Bug 703760 add for CallFireWall.
+    private static final String BLOCKED_NUMBER_CONTACT = "com.android.contacts";
 
     static {
         sUriMatcher = new UriMatcher(0);
@@ -87,11 +91,16 @@ public class BlockedNumberProvider extends ContentProvider {
         sUriMatcher.addURI(BlockedNumberContract.AUTHORITY, "blocked/#", BLOCKED_ID);
     }
 
+    /* UNISOC: Bug 700893 add for CallFireWall. @{ */
     private static final ProjectionMap sBlockedNumberColumns = ProjectionMap.builder()
             .add(BlockedNumberContract.BlockedNumbers.COLUMN_ID)
             .add(BlockedNumberContract.BlockedNumbers.COLUMN_ORIGINAL_NUMBER)
+            .add(BlockedNumberContract.BlockedNumbers.BLOCK_TYPE)
+            .add(BlockedNumberContract.BlockedNumbers.MIN_MATCH)
+            .add(BlockedNumberContract.BlockedNumbers.NAME)
             .add(BlockedNumberContract.BlockedNumbers.COLUMN_E164_NUMBER)
             .build();
+    /* @} */
 
     private static final String ID_SELECTION =
             BlockedNumberContract.BlockedNumbers.COLUMN_ID + "=?";
@@ -165,6 +174,25 @@ public class BlockedNumberProvider extends ContentProvider {
         if (DEBUG) {
             Log.d(TAG, String.format("inserted blocked number: %s", cv));
         }
+
+        /* UNISOC: Add for bug 607217. @{ */
+        final String blockType = cv.getAsString(
+                BlockedNumberContract.BlockedNumbers.BLOCK_TYPE);
+
+        if (TextUtils.isEmpty(blockType)) {
+            cv.put(BlockedNumberContract.BlockedNumbers.BLOCK_TYPE,
+                    String.valueOf(DEFAULT_BLOCK_TYPE));
+        }
+
+        final String minMatch = cv.getAsString(
+                BlockedNumberContract.BlockedNumbers.MIN_MATCH);
+
+        if (TextUtils.isEmpty(minMatch) && !TextUtils.isEmpty(phoneNumber)) {
+            String normalizedNumber = PhoneNumberUtils.normalizeNumber(phoneNumber);
+            cv.put(BlockedNumberContract.BlockedNumbers.MIN_MATCH,
+                    PhoneNumberUtils.toCallerIDMinMatch(normalizedNumber));
+        }
+        /* @} */
 
         // Then insert.
         final long id = mDbHelper.getWritableDatabase().insertWithOnConflict(
@@ -419,6 +447,7 @@ public class BlockedNumberProvider extends ContentProvider {
 
         final String inE164 = Utils.getE164Number(getContext(), phoneNumber, null); // may be empty.
 
+        /* UNISOC: Bug 786773 add for CallFireWall. @{ */
         final Cursor c = mDbHelper.getReadableDatabase().rawQuery(
                 "SELECT " +
                 BlockedNumberContract.BlockedNumbers.COLUMN_ORIGINAL_NUMBER + "," +
@@ -429,6 +458,7 @@ public class BlockedNumberProvider extends ContentProvider {
                         BlockedNumberContract.BlockedNumbers.COLUMN_E164_NUMBER + "=?2)",
                 new String[] {phoneNumber, inE164}
                 );
+        /* @} */
         try {
             while (c.moveToNext()) {
                 final String original = c.getString(0);
@@ -629,6 +659,12 @@ public class BlockedNumberProvider extends ContentProvider {
                     Binder.getCallingUid(), callingPackage) == AppOpsManager.MODE_ALLOWED) {
                 return true;
             }
+
+            /* UNISOC: Bug 703760 add for CallFireWall. @{ */
+            if (callingPackage.equals(BLOCKED_NUMBER_CONTACT)) {
+                return true;
+            }
+            /* @} */
 
             final TelephonyManager telephonyManager =
                     getContext().getSystemService(TelephonyManager.class);
